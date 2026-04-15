@@ -50,7 +50,7 @@ function onSubmit() {
     />
 
     <!-- Preview -->
-    <div v-else class="rounded-xl border border-default p-4 min-h-96">
+    <div v-else class="rounded-xl border border-default px-6 pb-6 min-h-96">
       <div v-if="content" class="prose prose-sm dark:prose-invert max-w-none">
         <MDC :value="content" />
       </div>
