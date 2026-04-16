@@ -4,8 +4,9 @@ type Tag = { id: number, label: string, color: string }
 const title = ref('')
 const content = ref('')
 const tagIds = ref<number[]>([])
-const tags = ref<Tag[]>([])
 const saving = ref(false)
+
+const { data: tags } = await useFetch<Tag[]>('/api/tags')
 
 async function save() {
   if (!title.value.trim() || saving.value) return
@@ -18,10 +19,6 @@ async function save() {
     await navigateTo(`/recipes/${recipe.id}`)
   } finally { saving.value = false }
 }
-
-onMounted(async () => {
-  tags.value = await $fetch<Tag[]>('/api/tags')
-})
 </script>
 
 <template>
@@ -35,7 +32,7 @@ onMounted(async () => {
       v-model:title="title"
       v-model:content="content"
       v-model:tag-ids="tagIds"
-      :tags="tags"
+      :tags="tags ?? []"
       :saving="saving"
       submit-label="Save recipe"
       @submit="save"

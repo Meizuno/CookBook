@@ -7,19 +7,18 @@ useHead({
 
 useSeoMeta({ title: 'Cook Book' })
 
-const { user, refresh } = useAuth()
+const { user } = useAuth()
 const route = useRoute()
-const loading = ref(import.meta.client)
 
-if (import.meta.client) {
-  if (!user.value) {
-    const refreshed = await $fetch('/api/auth/refresh', { method: 'POST' })
-      .then(() => true)
-      .catch(() => false)
-    if (refreshed) await refresh()
-  }
-  loading.value = false
-  if (!user.value && route.path !== '/login') await navigateTo('/login')
+// SSR auth check — runs on both server and client
+await callOnce(async () => {
+  const { refresh } = useAuth()
+  await refresh()
+})
+
+// Redirect if not authenticated
+if (!user.value && route.path !== '/login') {
+  await navigateTo('/login')
 }
 
 watch(user, (val) => {
@@ -29,9 +28,6 @@ watch(user, (val) => {
 
 <template>
   <UApp>
-    <div v-if="loading" class="flex min-h-screen items-center justify-center">
-      <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-dimmed" />
-    </div>
-    <NuxtPage v-else />
+    <NuxtPage />
   </UApp>
 </template>
