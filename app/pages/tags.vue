@@ -1,23 +1,18 @@
 <script setup lang="ts">
 type Tag = { id: number, label: string, color: string, position: number }
 
-const tags = ref<Tag[]>([])
 const newLabel = ref('')
 const editingId = ref<number | null>(null)
 const editLabel = ref('')
-const loading = ref(false)
 
-async function fetchTags() {
-  loading.value = true
-  try { tags.value = await $fetch<Tag[]>('/api/tags') }
-  finally { loading.value = false }
-}
+// SSR: initial tag list loaded on server
+const { data: tags, refresh: refreshTags, status } = await useFetch<Tag[]>('/api/tags')
 
 async function addTag() {
   if (!newLabel.value.trim()) return
   await $fetch('/api/tags', { method: 'POST', body: { label: newLabel.value.trim() } })
   newLabel.value = ''
-  await fetchTags()
+  await refreshTags()
 }
 
 function startEdit(tag: Tag) {
@@ -29,24 +24,17 @@ async function saveEdit(id: number) {
   if (!editLabel.value.trim()) return
   await $fetch(`/api/tags/${id}`, { method: 'PUT', body: { label: editLabel.value.trim() } })
   editingId.value = null
-  await fetchTags()
+  await refreshTags()
 }
 
 async function deleteTag(id: number) {
   await $fetch(`/api/tags/${id}`, { method: 'DELETE' })
-  await fetchTags()
+  await refreshTags()
 }
-
-onMounted(fetchTags)
 </script>
 
 <template>
   <div class="max-w-xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-xl font-bold">Tags</h1>
-      <UButton to="/" icon="i-lucide-arrow-left" variant="ghost" color="neutral" size="sm" label="Back" />
-    </div>
-
     <!-- Add tag -->
     <form class="flex gap-2 mb-6" @submit.prevent="addTag">
       <UInput v-model="newLabel" placeholder="New tag…" class="flex-1" />
@@ -54,7 +42,7 @@ onMounted(fetchTags)
     </form>
 
     <!-- Tag list -->
-    <div v-if="loading" class="space-y-2">
+    <div v-if="status === 'pending' && !tags?.length" class="space-y-2">
       <USkeleton v-for="i in 4" :key="i" class="h-10 w-full rounded-lg" />
     </div>
     <div v-else class="space-y-1">
@@ -76,7 +64,7 @@ onMounted(fetchTags)
           <UButton icon="i-lucide-trash-2" variant="ghost" color="error" size="xs" @click="deleteTag(tag.id)" />
         </template>
       </div>
-      <p v-if="!tags.length" class="text-sm text-muted text-center py-8">
+      <p v-if="!tags?.length" class="text-sm text-muted text-center py-8">
         No tags yet. Create your first one above.
       </p>
     </div>

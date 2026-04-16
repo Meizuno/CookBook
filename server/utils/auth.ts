@@ -10,84 +10,102 @@ export type AuthUser = {
 
 const isSecure = () => process.env.NODE_ENV === 'production'
 
-export const verifyAccessToken = async (token: string): Promise<AuthUser | null> => {
+/** Validate a token string against the auth service */
+async function validateToken(token: string): Promise<string | null> {
+  if (!token) return null
   try {
     const config = useRuntimeConfig()
     const result = await $fetch<{ user_id: string }>(`${config.authServiceUrl}/validate`, {
       headers: { authorization: `Bearer ${token}` }
     })
-    if (!result.user_id) return null
-    return { id: result.user_id }
+    return result.user_id ?? null
   }
   catch {
     return null
   }
 }
 
-const pendingRefreshes = new Map<string, Promise<{ access_token: string, refresh_token: string } | null>>()
-
-export const tryRefresh = async (event: H3Event): Promise<AuthUser | null> => {
-  const refreshToken = getCookie(event, 'cb_refresh')
-  if (!refreshToken) return null
-
-  if (!pendingRefreshes.has(refreshToken)) {
-    const config = useRuntimeConfig()
-    const promise = $fetch<{ access_token: string, refresh_token: string }>(
-      `${config.authServiceUrl}/refresh`,
-      { method: 'POST', body: { refresh_token: refreshToken } }
-    ).catch(() => null).finally(() => pendingRefreshes.delete(refreshToken))
-    pendingRefreshes.set(refreshToken, promise)
-  }
-
-  const result = await pendingRefreshes.get(refreshToken)!
-  if (!result) return null
-
-  setAuthCookies(event, result.access_token, result.refresh_token)
-  const user = await verifyAccessToken(result.access_token)
-  if (user) {
-    event.context.user = user
-    event.context.accessToken = result.access_token
-  }
-  return user
+/** Read cookie from H3 event or raw header (SSR internal fetch) */
+function readCookie(event: H3Event, name: string): string | null {
+  const fromH3 = getCookie(event, name)
+  if (fromH3) return fromH3
+  const raw = getHeader(event, 'cookie') ?? ''
+  const match = raw.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))
+  return match?.[1] ?? null
 }
 
-export const getAuthUser = async (event: H3Event): Promise<AuthUser | null> => {
+// Stores refreshed token per SSR render so internal API calls can use it
+let ssrRefreshedToken: string | null = null
+
+/**
+ * Authenticate the request. Checks access token first, then tries refresh.
+ * Sets event.context.user and event.context.accessToken on success.
+ */
+export async function authenticate(event: H3Event): Promise<AuthUser | null> {
+  // Already authenticated (e.g. by a previous middleware run)
   if (event.context.user) return event.context.user as AuthUser
 
-  // Check Bearer token first (MCP clients), then cookie (browser)
+  // 1. Check Bearer header (MCP clients) or access token cookie or SSR-refreshed token
   const header = getHeader(event, 'authorization')
-  const token = header?.toLowerCase().startsWith('bearer ')
+  const accessToken = header?.toLowerCase().startsWith('bearer ')
     ? header.slice(7).trim()
-    : (getCookie(event, 'cb_access') ?? null)
+    : (readCookie(event, 'rb_access') ?? ssrRefreshedToken ?? '')
 
-  if (token) {
-    const user = await verifyAccessToken(token)
-    if (user) {
-      event.context.user = user
-      event.context.accessToken = token
-      return user
-    }
+  const userId = await validateToken(accessToken)
+  if (userId) {
+    const user: AuthUser = { id: userId }
+    event.context.user = user
+    event.context.accessToken = accessToken
+    return user
   }
-  return tryRefresh(event)
+
+  // 2. Try refresh token
+  const refreshToken = readCookie(event, 'rb_refresh')
+  if (!refreshToken) return null
+
+  try {
+    const config = useRuntimeConfig()
+    const result = await $fetch<{ access_token: string, refresh_token: string }>(
+      `${config.authServiceUrl}/refresh`,
+      { method: 'POST', body: { refresh_token: refreshToken } }
+    )
+
+    setAuthCookies(event, result.access_token, result.refresh_token)
+    // Store for other SSR internal fetches in the same render
+    ssrRefreshedToken = result.access_token
+    setTimeout(() => { ssrRefreshedToken = null }, 5_000)
+
+    const newUserId = await validateToken(result.access_token)
+    if (!newUserId) return null
+
+    const user: AuthUser = { id: newUserId }
+    event.context.user = user
+    event.context.accessToken = result.access_token
+    return user
+  }
+  catch {
+    return null
+  }
 }
 
-export const requireAuthUser = async (event: H3Event): Promise<AuthUser> => {
-  const user = await getAuthUser(event)
+/** Require authenticated user or throw 401 */
+export function requireAuthUser(event: H3Event): AuthUser {
+  const user = event.context.user as AuthUser | undefined
   if (!user) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   return user
 }
 
-export const setAuthCookies = (event: H3Event, accessToken: string, refreshToken: string) => {
+export function setAuthCookies(event: H3Event, accessToken: string, refreshToken: string) {
   const secure = isSecure()
-  setCookie(event, 'cb_access', accessToken, {
+  setCookie(event, 'rb_access', accessToken, {
     httpOnly: true, sameSite: 'lax', secure, path: '/'
   })
-  setCookie(event, 'cb_refresh', refreshToken, {
+  setCookie(event, 'rb_refresh', refreshToken, {
     httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 60 * 60 * 24 * 7
   })
 }
 
-export const clearAuthCookies = (event: H3Event) => {
-  deleteCookie(event, 'cb_access', { path: '/' })
-  deleteCookie(event, 'cb_refresh', { path: '/' })
+export function clearAuthCookies(event: H3Event) {
+  deleteCookie(event, 'rb_access', { path: '/' })
+  deleteCookie(event, 'rb_refresh', { path: '/' })
 }

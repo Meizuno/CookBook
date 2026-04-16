@@ -3,62 +3,43 @@ type Tag = { id: number, label: string, color: string }
 type RecipeTag = { tag_id: number, tag: Tag }
 type Recipe = { id: number, title: string, content: string, tags: RecipeTag[], updated_at: string }
 
-const recipes = ref<Recipe[]>([])
-const tags = ref<Tag[]>([])
 const search = ref('')
 const activeTag = ref('')
-const loading = ref(false)
 
-async function fetchRecipes() {
-  loading.value = true
-  try {
-    recipes.value = await $fetch<Recipe[]>('/api/recipes', {
-      params: {
-        ...(search.value ? { search: search.value } : {}),
-        ...(activeTag.value ? { tag: activeTag.value } : {})
-      }
-    })
-  } finally { loading.value = false }
-}
+// SSR: initial load on server
+const { data: tags } = await useFetch<Tag[]>('/api/tags')
+const { data: recipes, status, refresh: refreshRecipes } = await useFetch<Recipe[]>('/api/recipes', {
+  query: computed(() => ({
+    ...(search.value ? { search: search.value } : {}),
+    ...(activeTag.value ? { tag: activeTag.value } : {})
+  })),
+  watch: false
+})
 
-async function fetchTags() {
-  tags.value = await $fetch<Tag[]>('/api/tags')
-}
+// Client: re-fetch on filter changes
+watch([search, activeTag], () => refreshRecipes())
 
 async function deleteRecipe(id: number) {
   await $fetch(`/api/recipes/${id}`, { method: 'DELETE' })
-  await fetchRecipes()
+  await refreshRecipes()
 }
 
 function toggleTag(label: string) {
   activeTag.value = activeTag.value === label ? '' : label
-  fetchRecipes()
 }
 
 function contentPreview(content: string) {
   const plain = content.replace(/[#*_`>\[\]()!-]/g, '').trim()
   return plain.length > 120 ? plain.slice(0, 120) + '…' : plain
 }
-
-watch(search, () => fetchRecipes())
-onMounted(() => { fetchRecipes(); fetchTags() })
 </script>
 
 <template>
   <div class="max-w-3xl mx-auto px-4 py-8">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-xl font-bold">Recipes</h1>
-      <div class="flex gap-2">
-        <UButton to="/tags" icon="i-lucide-tags" variant="ghost" color="neutral" size="sm" label="Tags" />
-        <UButton to="/recipes/new" icon="i-lucide-plus" color="primary" size="sm" label="New recipe" />
-      </div>
-    </div>
-
     <!-- Search + tag filter -->
     <div class="space-y-3 mb-6">
       <UInput v-model="search" icon="i-lucide-search" placeholder="Search recipes…" />
-      <div v-if="tags.length" class="flex flex-wrap gap-1.5">
+      <div v-if="tags?.length" class="flex flex-wrap gap-1.5">
         <button
           v-for="tag in tags"
           :key="tag.id"
@@ -74,7 +55,7 @@ onMounted(() => { fetchRecipes(); fetchTags() })
     </div>
 
     <!-- Recipe list -->
-    <div v-if="loading" class="space-y-3">
+    <div v-if="status === 'pending' && !recipes?.length" class="space-y-3">
       <USkeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-xl" />
     </div>
     <div v-else class="space-y-2">
@@ -108,7 +89,7 @@ onMounted(() => { fetchRecipes(); fetchTags() })
           />
         </div>
       </NuxtLink>
-      <p v-if="!recipes.length" class="text-sm text-muted text-center py-12">
+      <p v-if="!recipes?.length" class="text-sm text-muted text-center py-12">
         No recipes found. Create your first one!
       </p>
     </div>

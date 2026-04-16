@@ -4,8 +4,10 @@ type Tag = { id: number, label: string, color: string }
 const title = ref('')
 const content = ref('')
 const tagIds = ref<number[]>([])
-const tags = ref<Tag[]>([])
 const saving = ref(false)
+
+// SSR: tags loaded on server
+const { data: tags } = await useFetch<Tag[]>('/api/tags')
 
 async function save() {
   if (!title.value.trim() || saving.value) return
@@ -18,24 +20,15 @@ async function save() {
     await navigateTo(`/recipes/${recipe.id}`)
   } finally { saving.value = false }
 }
-
-onMounted(async () => {
-  tags.value = await $fetch<Tag[]>('/api/tags')
-})
 </script>
 
 <template>
   <div class="max-w-3xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-xl font-bold">New recipe</h1>
-      <UButton to="/" icon="i-lucide-arrow-left" variant="ghost" color="neutral" size="sm" label="Back" />
-    </div>
-
     <RecipeForm
       v-model:title="title"
       v-model:content="content"
       v-model:tag-ids="tagIds"
-      :tags="tags"
+      :tags="tags ?? []"
       :saving="saving"
       submit-label="Save recipe"
       @submit="save"
