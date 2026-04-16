@@ -36,7 +36,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/Meizuno/cook-book
+          images: ghcr.io/Meizuno/recipes-book
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -65,5 +65,5 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ~/servers/meizuno
-            docker compose -f docker-compose.yml pull cook-book
-            docker compose -f docker-compose.yml up -d cook-book
+            docker compose -f docker-compose.yml pull recipes-book
+            docker compose -f docker-compose.yml up -d recipes-book
