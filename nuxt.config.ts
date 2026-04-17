@@ -27,12 +27,6 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
-      '/**': {
-        cache: {
-          maxAge: 60,
-          varies: ['cookie:rb_access']
-        }
-      },
       '/api/**': { cache: false }
     }
   }
