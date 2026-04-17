@@ -7,23 +7,39 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
   server.registerTool(
     'list_recipes',
     {
-      description: 'List all recipes with optional tag filter. Returns id, title, tags, and hasContent flag (true if recipe has markdown content). Use get_recipe to read the full content.',
+      description: 'List recipes with optional tag filter and pagination. Returns items (id, title, tags, hasContent), total count, and hasMore flag. Use get_recipe for full content. Default limit is 20.',
       inputSchema: z.object({
-        tag: z.string().optional().describe('Filter by exact tag label.')
+        tag: z.string().optional().describe('Filter by exact tag label.'),
+        limit: z.number().int().optional().describe('Max items to return (default 20, max 100).'),
+        offset: z.number().int().optional().describe('Number of items to skip (default 0).')
       })
     },
-    async ({ tag }) => {
-      const recipes = await db.recipe.findMany({
-        where: tag ? { tags: { some: { tag: { label: tag } } } } : {},
-        include: { tags: { include: { tag: true } } },
-        orderBy: { updated_at: 'desc' }
+    async ({ tag, limit, offset }) => {
+      const take = Math.min(limit ?? 20, 100)
+      const skip = offset ?? 0
+      const where = tag ? { tags: { some: { tag: { label: tag } } } } : {}
+
+      const [recipes, total] = await Promise.all([
+        db.recipe.findMany({
+          where,
+          include: { tags: { include: { tag: true } } },
+          orderBy: { updated_at: 'desc' },
+          take,
+          skip
+        }),
+        db.recipe.count({ where })
+      ])
+
+      return toJson({
+        items: recipes.map(r => ({
+          id: r.id,
+          title: r.title,
+          tags: r.tags.map(rt => rt.tag.label),
+          hasContent: r.content.length > 0
+        })),
+        total,
+        hasMore: skip + recipes.length < total
       })
-      return toJson(recipes.map(r => ({
-        id: r.id,
-        title: r.title,
-        tags: r.tags.map(rt => rt.tag.label),
-        hasContent: r.content.length > 0
-      })))
     }
   )
 
