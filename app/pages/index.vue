@@ -1,7 +1,6 @@
 <script setup lang="ts">
 type Tag = { id: number, label: string, color: string }
-type RecipeTag = { tag_id: number, tag: Tag }
-type Recipe = { id: number, title: string, content: string, tags: RecipeTag[], updated_at: string }
+type Recipe = { id: number, title: string, tagIds: number[], updated_at: string }
 type RecipesResponse = { items: Recipe[], total: number, hasMore: boolean }
 
 const LIMIT = 20
@@ -15,6 +14,7 @@ const loadingMore = ref(false)
 const sentinel = ref<HTMLElement | null>(null)
 
 const { data: tags } = await useFetch<Tag[]>('/api/tags')
+const tagById = computed(() => new Map(tags.value?.map(t => [t.id, t]) ?? []))
 
 // SSR: initial load (useFetch auto-forwards cookies)
 const { data: initialData } = await useFetch<RecipesResponse>('/api/recipes', {
@@ -79,10 +79,7 @@ function toggleTag(label: string) {
   activeTag.value = activeTag.value === label ? '' : label
 }
 
-function contentPreview(content: string) {
-  const plain = content.replace(/[#*_`>\[\]()!-]/g, '').trim()
-  return plain.length > 120 ? plain.slice(0, 120) + '…' : plain
-}
+
 </script>
 
 <template>
@@ -120,16 +117,13 @@ function contentPreview(content: string) {
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
             <p class="font-semibold text-sm truncate">{{ recipe.title }}</p>
-            <p v-if="recipe.content" class="text-xs text-muted mt-1 line-clamp-2">
-              {{ contentPreview(recipe.content) }}
-            </p>
-            <div v-if="recipe.tags.length" class="flex flex-wrap gap-1 mt-2">
+            <div v-if="recipe.tagIds.length" class="flex flex-wrap gap-1 mt-2">
               <span
-                v-for="rt in recipe.tags"
-                :key="rt.tag_id"
+                v-for="id in recipe.tagIds"
+                :key="id"
                 class="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                :class="`bg-${rt.tag.color}-500/10 text-${rt.tag.color}-600 dark:text-${rt.tag.color}-400`"
-              >{{ rt.tag.label }}</span>
+                :class="tagById.get(id) ? `bg-${tagById.get(id)!.color}-500/10 text-${tagById.get(id)!.color}-600 dark:text-${tagById.get(id)!.color}-400` : ''"
+              >{{ tagById.get(id)?.label }}</span>
             </div>
           </div>
           <UButton

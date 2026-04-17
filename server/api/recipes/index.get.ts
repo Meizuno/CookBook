@@ -20,9 +20,8 @@ export default defineEventHandler(async (event) => {
       select: {
         id: true,
         title: true,
-        content: true,
         updated_at: true,
-        tags: { include: { tag: true } }
+        tags: { select: { tag_id: true } }
       },
       orderBy: { updated_at: 'desc' },
       skip: offset,
@@ -32,10 +31,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   return {
-    items: items.map(r => ({
-      ...r,
-      content: r.content.length > 150 ? r.content.slice(0, 150) : r.content
-    })),
+    items: items.map(r => ({ ...r, tagIds: r.tags.map(t => t.tag_id), tags: undefined })),
     total,
     hasMore: offset + items.length < total
   }

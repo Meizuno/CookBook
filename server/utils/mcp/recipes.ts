@@ -22,7 +22,12 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
       const [recipes, total] = await Promise.all([
         db.recipe.findMany({
           where,
-          include: { tags: { include: { tag: true } } },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            tags: { select: { tag_id: true } }
+          },
           orderBy: { updated_at: 'desc' },
           take,
           skip
@@ -34,7 +39,7 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
         items: recipes.map(r => ({
           id: r.id,
           title: r.title,
-          tags: r.tags.map(rt => rt.tag.label),
+          tagIds: r.tags.map(rt => rt.tag_id),
           hasContent: r.content.length > 0
         })),
         total,
