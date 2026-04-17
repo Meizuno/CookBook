@@ -23,5 +23,17 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     authServiceUrl: 'https://auth.meizuno.com'
+  },
+
+  nitro: {
+    routeRules: {
+      '/**': {
+        cache: {
+          maxAge: 60,
+          varies: ['cookie:rb_access']
+        }
+      },
+      '/api/**': { cache: false }
+    }
   }
 })

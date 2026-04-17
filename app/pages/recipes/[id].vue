@@ -6,27 +6,14 @@ type Recipe = { id: number, title: string, content: string, tags: RecipeTag[], u
 const route = useRoute()
 const id = Number(route.params.id)
 
-const recipe = ref<Recipe | null>(null)
-const allTags = ref<Tag[]>([])
-const loading = ref(true)
+const { data: recipe, refresh: refreshRecipe } = await useFetch<Recipe>(`/api/recipes/${id}`)
+const { data: allTags } = await useFetch<Tag[]>('/api/tags')
+
 const editing = ref(false)
 const editTitle = ref('')
 const editContent = ref('')
 const editTagIds = ref<number[]>([])
 const saving = ref(false)
-
-async function fetchRecipe() {
-  recipe.value = await $fetch<Recipe>(`/api/recipes/${id}`)
-}
-
-onMounted(async () => {
-  const [, tagsData] = await Promise.all([
-    fetchRecipe(),
-    $fetch<Tag[]>('/api/tags')
-  ])
-  allTags.value = tagsData
-  loading.value = false
-})
 
 function startEdit() {
   if (!recipe.value) return
@@ -44,7 +31,7 @@ async function saveEdit() {
       method: 'PUT',
       body: { title: editTitle.value, content: editContent.value, tagIds: editTagIds.value }
     })
-    await fetchRecipe()
+    await refreshRecipe()
     editing.value = false
   } finally { saving.value = false }
 }
@@ -58,7 +45,7 @@ async function deleteRecipe() {
 <template>
   <div class="max-w-3xl mx-auto px-4" :class="editing ? 'pt-4 pb-2 h-[calc(100dvh-3rem)] overflow-hidden' : 'py-4'">
     <!-- Loading -->
-    <div v-if="loading" class="space-y-4">
+    <div v-if="!recipe" class="space-y-4">
       <USkeleton class="h-8 w-64 rounded" />
       <USkeleton class="h-64 w-full rounded-xl" />
     </div>
@@ -69,7 +56,7 @@ async function deleteRecipe() {
         v-model:title="editTitle"
         v-model:content="editContent"
         v-model:tag-ids="editTagIds"
-        :tags="allTags"
+        :tags="allTags ?? []"
         :saving="saving"
         submit-label="Save"
         @submit="saveEdit"
@@ -78,7 +65,7 @@ async function deleteRecipe() {
     </template>
 
     <!-- View mode -->
-    <template v-else-if="recipe">
+    <template v-else>
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">{{ recipe.title }}</h1>
         <div class="flex gap-1">

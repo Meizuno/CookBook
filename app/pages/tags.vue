@@ -1,26 +1,17 @@
 <script setup lang="ts">
 type Tag = { id: number, label: string, color: string, position: number }
 
-const tags = ref<Tag[]>([])
-const loading = ref(true)
 const newLabel = ref('')
 const editingId = ref<number | null>(null)
 const editLabel = ref('')
 
-async function fetchTags() {
-  tags.value = await $fetch<Tag[]>('/api/tags')
-}
-
-onMounted(async () => {
-  await fetchTags()
-  loading.value = false
-})
+const { data: tags, refresh: refreshTags, status } = await useFetch<Tag[]>('/api/tags')
 
 async function addTag() {
   if (!newLabel.value.trim()) return
   await $fetch('/api/tags', { method: 'POST', body: { label: newLabel.value.trim() } })
   newLabel.value = ''
-  await fetchTags()
+  await refreshTags()
 }
 
 function startEdit(tag: Tag) {
@@ -32,12 +23,12 @@ async function saveEdit(id: number) {
   if (!editLabel.value.trim()) return
   await $fetch(`/api/tags/${id}`, { method: 'PUT', body: { label: editLabel.value.trim() } })
   editingId.value = null
-  await fetchTags()
+  await refreshTags()
 }
 
 async function deleteTag(id: number) {
   await $fetch(`/api/tags/${id}`, { method: 'DELETE' })
-  await fetchTags()
+  await refreshTags()
 }
 </script>
 
@@ -50,7 +41,7 @@ async function deleteTag(id: number) {
     </form>
 
     <!-- Tag list -->
-    <div v-if="loading" class="space-y-2">
+    <div v-if="status === 'pending' && !tags?.length" class="space-y-2">
       <USkeleton v-for="i in 4" :key="i" class="h-10 w-full rounded-lg" />
     </div>
     <div v-else class="space-y-1">
@@ -72,7 +63,7 @@ async function deleteTag(id: number) {
           <UButton icon="i-lucide-trash-2" variant="ghost" color="error" size="xs" @click="deleteTag(tag.id)" />
         </template>
       </div>
-      <p v-if="!tags.length" class="text-sm text-muted text-center py-8">
+      <p v-if="!tags?.length" class="text-sm text-muted text-center py-8">
         No tags yet. Create your first one above.
       </p>
     </div>
