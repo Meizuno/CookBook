@@ -18,6 +18,8 @@ model Recipe {
   tags       RecipeTag[]
 
   @@index([user_id])
+  @@index([title(ops: raw("gin_trgm_ops"))],   type: Gin)
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("recipes")
 }
 

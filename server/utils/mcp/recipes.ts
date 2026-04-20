@@ -7,17 +7,26 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
   server.registerTool(
     'list_recipes',
     {
-      description: 'List recipes with optional tag filter and pagination. Returns items (id, title, tags, hasContent), total count, and hasMore flag. Use get_recipe for full content. Default limit is 20.',
+      description: 'List or search recipes. Optional `query` matches against title and content (case-insensitive substring, trigram-indexed); optional `tag` filters by exact tag label. Returns items (id, title, tagIds, hasContent, and snippet when a query matched the content), total count, and hasMore flag. Use get_recipe for full content. Default limit is 20.',
       inputSchema: z.object({
+        query: z.string().optional().describe('Keyword matched against title and content. Omit to list all recipes.'),
         tag: z.string().optional().describe('Filter by exact tag label.'),
         limit: z.number().int().optional().describe('Max items to return (default 20, max 100).'),
         offset: z.number().int().optional().describe('Number of items to skip (default 0).')
       })
     },
-    async ({ tag, limit, offset }) => {
+    async ({ query, tag, limit, offset }) => {
       const take = Math.min(limit ?? 20, 100)
       const skip = offset ?? 0
-      const where = tag ? { tags: { some: { tag: { label: tag } } } } : {}
+      const where = {
+        ...(query ? {
+          OR: [
+            { title:   { contains: query, mode: 'insensitive' as const } },
+            { content: { contains: query, mode: 'insensitive' as const } }
+          ]
+        } : {}),
+        ...(tag ? { tags: { some: { tag: { label: tag } } } } : {})
+      }
 
       const [recipes, total] = await Promise.all([
         db.recipe.findMany({
@@ -35,12 +44,22 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
         db.recipe.count({ where })
       ])
 
+      const makeSnippet = (content: string) => {
+        if (!query) return null
+        const idx = content.toLowerCase().indexOf(query.toLowerCase())
+        if (idx < 0) return null
+        const start = Math.max(0, idx - 40)
+        const end = Math.min(content.length, idx + query.length + 40)
+        return (start > 0 ? '…' : '') + content.slice(start, end) + (end < content.length ? '…' : '')
+      }
+
       return toJson({
         items: recipes.map(r => ({
           id: r.id,
           title: r.title,
           tagIds: r.tags.map(rt => rt.tag_id),
-          hasContent: r.content.length > 0
+          hasContent: r.content.length > 0,
+          snippet: makeSnippet(r.content)
         })),
         total,
         hasMore: skip + recipes.length < total
