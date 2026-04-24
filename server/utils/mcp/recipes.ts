@@ -19,6 +19,7 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
       const take = Math.min(limit ?? 20, 100)
       const skip = offset ?? 0
       const where = {
+        is_deleted: false,
         ...(query ? {
           OR: [
             { title:   { contains: query, mode: 'insensitive' as const } },
@@ -77,7 +78,7 @@ export function registerRecipeTools(server: McpServer, db: PrismaClient) {
     },
     async ({ id }) => {
       const recipe = await db.recipe.findFirst({
-        where: { id },
+        where: { id, is_deleted: false },
         include: { tags: { include: { tag: true } } }
       })
       if (!recipe) return toJson({ error: 'Recipe not found' })

@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
 
   const db = getPrisma()
   const recipe = await db.recipe.findFirst({
-    where: { id },
+    where: { id, is_deleted: false },
     include: { tags: { include: { tag: true } } }
   })
   if (!recipe) throw createError({ statusCode: 404, statusMessage: 'Recipe not found' })

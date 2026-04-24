@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const db = getPrisma()
   const where = {
+    is_deleted: false,
     ...(search ? {
       OR: [
         { title:   { contains: search, mode: 'insensitive' as const } },

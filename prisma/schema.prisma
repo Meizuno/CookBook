@@ -12,12 +12,14 @@ model Recipe {
   user_id    String
   title      String      @db.VarChar(300)
   content    String      @default("") @db.Text
+  is_deleted Boolean     @default(false)
   created_at DateTime    @default(now())
   updated_at DateTime    @default(now()) @updatedAt
 
   tags       RecipeTag[]
 
   @@index([user_id])
+  @@index([user_id, is_deleted])
   @@index([title(ops: raw("gin_trgm_ops"))],   type: Gin)
   @@index([content(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("recipes")

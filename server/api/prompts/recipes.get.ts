@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   // Single recipe detail
   if (recipeId) {
     const recipe = await db.recipe.findFirst({
-      where: { id: recipeId },
+      where: { id: recipeId, is_deleted: false },
       include: { tags: { include: { tag: true } } }
     })
     if (!recipe) throw createError({ statusCode: 404, statusMessage: 'Recipe not found' })
@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
 
   // Recipe list
   const where = {
+    is_deleted: false,
     ...(search ? {
       OR: [
         { title:   { contains: search, mode: 'insensitive' as const } },
