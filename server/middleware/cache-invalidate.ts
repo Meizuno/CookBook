@@ -1,21 +1,18 @@
 import { promises as fsp } from 'node:fs'
 
-// Sister middleware to `island-cache.ts`. Wipes `.cache/islands/` on any
-// successful recipe or tag mutation.
+// Sister middleware to the disk caches. Wipes `.cache/islands/` and
+// `.cache/pages/` on any successful recipe or tag mutation.
 //
 // Why coarse (whole-dir rm vs per-file):
 //   Island filenames are hashed from their props (`RecipeView__<sha1>.json`),
 //   so given just a recipe id from the API path we can't identify which
-//   files belong to that recipe without reading each one. Recipe-edit
-//   traffic is rare enough that nuking the directory is cheaper than
-//   maintaining a sidecar index. The cache repopulates on the next
-//   page visit.
-//
-// Page caching was removed in favour of letting Nitro re-render fresh
-// every request — the heavy MDC parse lives inside the cached island,
-// so pages stay cheap to render.
+//   files belong to that recipe without reading each one. The home
+//   page cache is per-user; one user's edit invalidates every user's
+//   view of the recipe list. Recipe-edit traffic is rare enough that
+//   nuking the directories is cheaper than maintaining sidecar indexes.
 
 const ISLAND_DIR = '.cache/islands'
+const PAGE_DIR = '.cache/pages'
 
 export default defineEventHandler((event) => {
   const method = event.method
@@ -29,9 +26,9 @@ export default defineEventHandler((event) => {
 
   event.node.res.on('finish', async () => {
     if (event.node.res.statusCode >= 400) return
-    try {
-      await fsp.rm(ISLAND_DIR, { recursive: true, force: true })
-    }
-    catch { /* missing is fine */ }
+    await Promise.all([
+      fsp.rm(ISLAND_DIR, { recursive: true, force: true }).catch(() => {}),
+      fsp.rm(PAGE_DIR, { recursive: true, force: true }).catch(() => {})
+    ])
   })
 })
