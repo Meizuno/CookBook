@@ -1,19 +1,36 @@
+import { sendRedirect, getHeader } from 'h3'
+
 const SKIP_PATHS = [
   "/api/auth/google",
   "/api/auth/callback",
   "/api/auth/refresh",
   "/api/auth/logout",
   "/api/_nuxt_icon/",
+  "/api/health",
 ];
+
+const LOGIN_PATH = '/login'
 
 export default defineEventHandler(async (event) => {
   const path = event.path ?? "";
   if (SKIP_PATHS.some((p) => path.startsWith(p))) return;
 
-  // Run auth for both page requests and API requests
-  // For page requests: cookies are set on the real browser response
-  // For API requests: user is available via event.context
-  if (path.startsWith("/api/") || !path.includes(".")) {
+  const isApi = path.startsWith("/api/");
+  const isIsland = path.startsWith("/__nuxt_island/");
+  const isStatic = path.includes(".") && !isIsland;
+  const isPage = !isApi && !isStatic && !isIsland;
+
+  // Authenticate page, API, and island requests — islands need
+  // event.context.user so the per-user page-cache middleware can
+  // scope cache keys by user ID.
+  if (isApi || isPage || isIsland) {
     await authenticate(event);
   }
+
+  // Server-side page gating: unauthenticated page requests go to /login;
+  // already-logged-in users hitting /login bounce back to home.
+  if (!isPage) return;
+  const authed = Boolean(event.context.user);
+  if (!authed && path !== LOGIN_PATH) return sendRedirect(event, LOGIN_PATH, 302);
+  if (authed && path === LOGIN_PATH) return sendRedirect(event, '/', 302);
 });

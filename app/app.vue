@@ -7,24 +7,16 @@ useHead({
 
 useSeoMeta({ title: 'Cook Book' })
 
-const { user } = useAuth()
+// Hide the header on /login so it doesn't render on the static prerendered
+// login page. AppHeader itself always renders its structure to avoid layout
+// shift while client-side auth resolves.
 const route = useRoute()
-
-const { data } = await useFetch<{ user: AuthUser }>('/api/auth/me')
-user.value = data.value?.user ?? null
-
-if (!user.value && route.path !== '/login') {
-  await navigateTo('/login')
-}
-
-watch(user, (val) => {
-  if (!val && route.path !== '/login') navigateTo('/login')
-})
+const showHeader = computed(() => route.path !== '/login')
 </script>
 
 <template>
   <UApp>
-    <AppHeader />
+    <AppHeader v-if="showHeader" />
     <NuxtPage />
   </UApp>
 </template>

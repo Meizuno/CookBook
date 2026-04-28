@@ -28,7 +28,17 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
+      // Static at build time → `.output/public/login/index.html`. Auth
+      // middleware 302s logged-in users away from /login before the
+      // static handler runs.
+      '/login':  { prerender: true },
+      // API responses: never cached at the Nitro layer; auth middleware
+      // gates per-request.
       '/api/**': { cache: false }
+      // Page + island caching is handled by `server/middleware/page-cache.ts`,
+      // which writes plain `.html` and `.json` files into `.cache/pages/`
+      // and `.cache/islands/`, and wipes them on /api/recipes /api/tags
+      // mutations.
     }
   }
 })
