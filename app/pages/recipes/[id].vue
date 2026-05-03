@@ -54,7 +54,15 @@ async function saveEdit() {
   finally { saving.value = false }
 }
 
+const { confirm } = useConfirm()
+
 async function deleteRecipe() {
+  const ok = await confirm({
+    title: 'Delete recipe?',
+    description: 'This recipe will be removed. This cannot be undone.',
+    confirmLabel: 'Delete'
+  })
+  if (!ok) return
   await $fetch(`/api/recipes/${id}`, { method: 'DELETE' })
   await navigateTo('/')
 }
@@ -78,23 +86,23 @@ async function deleteRecipe() {
 
     <!-- View mode -->
     <template v-else>
-      <!-- Action buttons stay outside the island so they're interactive -->
-      <div class="flex items-center justify-end gap-1 mb-4">
-        <UButton
-          icon="i-lucide-pencil"
-          variant="ghost"
-          color="neutral"
-          size="sm"
-          :loading="loadingEdit"
-          @click="startEdit"
-        />
-        <UButton icon="i-lucide-trash-2" variant="ghost" color="error" size="sm" @click="deleteRecipe" />
-      </div>
-
       <!-- Everything (metadata + body) streams from
            /api/recipes/<id>/stream so navigation is instant and the
-           page paints progressively as bytes arrive. -->
-      <RecipeStream :id="id" :key="version" />
+           page paints progressively as bytes arrive. The actions
+           slot puts Edit/Delete inline with the title row. -->
+      <RecipeStream :id="id" :key="version">
+        <template #actions>
+          <UButton
+            icon="i-lucide-pencil"
+            variant="ghost"
+            color="neutral"
+            size="sm"
+            :loading="loadingEdit"
+            @click="startEdit"
+          />
+          <UButton icon="i-lucide-trash-2" variant="ghost" color="error" size="sm" @click="deleteRecipe" />
+        </template>
+      </RecipeStream>
     </template>
   </div>
 </template>

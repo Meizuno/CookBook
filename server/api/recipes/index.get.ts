@@ -1,11 +1,21 @@
+// Streaming endpoint for the home-page recipe list. Emits NDJSON:
+//
+//   {"meta":{"total":N,"hasMore":boolean}}\n
+//   {"item":{...recipe}}\n
+//   {"item":{...recipe}}\n
+//   ...
+//
+// Meta arrives first so the client can clear loading state and sync
+// pagination flags before recipe cards begin rendering. Items follow
+// in display order (newest updated first). Pagination params (limit,
+// offset, search, tags) are unchanged from the previous JSON shape.
+
 const DEFAULT_LIMIT = 20
 
 export default defineEventHandler(async (event) => {
   await requireAuthUser(event)
   const query = getQuery(event)
   // Repeated `tags` query keys → recipe must have ALL of them (intersection).
-  // `?tags=meat&tags=quick` parses as ['meat', 'quick']; a single `?tags=meat`
-  // parses as 'meat', so normalize both shapes.
   const rawTags = query.tags
   const tags = (Array.isArray(rawTags) ? rawTags : rawTags ? [rawTags] : [])
     .map(s => String(s).trim()).filter(Boolean)
@@ -55,15 +65,34 @@ export default defineEventHandler(async (event) => {
     return content.slice(0, 120).trim() + (content.length > 120 ? '…' : '')
   }
 
-  return {
-    items: items.map(r => ({
-      id: r.id,
-      title: r.title,
-      updated_at: r.updated_at,
-      tagIds: r.tags.map(t => t.tag_id),
-      snippet: makeSnippet(r.content)
-    })),
-    total,
-    hasMore: offset + items.length < total
-  }
+  setHeader(event, 'content-type', 'application/x-ndjson; charset=utf-8')
+  setHeader(event, 'cache-control', 'no-store')
+  setHeader(event, 'x-accel-buffering', 'no')
+
+  const enc = new TextEncoder()
+  const meta = { total, hasMore: offset + items.length < total }
+
+  // Deliberate per-item pacing so the client sees a visible cascade
+  // rather than 20 cards landing in the same frame. ~30ms is below the
+  // "feels slow" threshold but above "all at once".
+  const ITEM_INTERVAL_MS = 30
+
+  return new ReadableStream({
+    async start(controller) {
+      controller.enqueue(enc.encode(JSON.stringify({ meta }) + '\n'))
+      await new Promise(r => setImmediate(r))
+      for (const r of items) {
+        const item = {
+          id: r.id,
+          title: r.title,
+          updated_at: r.updated_at,
+          tagIds: r.tags.map(t => t.tag_id),
+          snippet: makeSnippet(r.content)
+        }
+        controller.enqueue(enc.encode(JSON.stringify({ item }) + '\n'))
+        await new Promise(r => setTimeout(r, ITEM_INTERVAL_MS))
+      }
+      controller.close()
+    }
+  })
 })

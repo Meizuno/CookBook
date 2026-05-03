@@ -20,6 +20,19 @@ const mode = ref<'edit' | 'preview'>('edit')
 const editorRef = useTemplateRef<any>('editor')
 const { displayContent } = useImagePaste(content, editorRef)
 
+const { format, formatting } = useMarkdownFormatter()
+const toast = useToast()
+
+async function onFormat() {
+  if (!content.value.trim() || formatting.value) return
+  try {
+    content.value = await format(content.value)
+  }
+  catch (err) {
+    toast.add({ title: 'Format failed', description: (err as Error).message, color: 'error' })
+  }
+}
+
 function onSubmit() {
   if (!title.value.trim() || props.saving) return
   emit('submit')
@@ -40,6 +53,17 @@ function onSubmit() {
       </div>
       <div class="flex-1" />
       <div class="flex gap-2">
+        <UButton
+          v-if="mode === 'edit'"
+          variant="ghost"
+          color="neutral"
+          icon="i-lucide-wand-2"
+          label="Format"
+          size="xs"
+          :loading="formatting"
+          :disabled="!displayContent.trim()"
+          @click="onFormat"
+        />
         <UButton variant="ghost" color="neutral" label="Cancel" size="xs" @click="emit('cancel')" />
         <UButton type="submit" color="primary" icon="i-lucide-save" :label="submitLabel ?? 'Save'" size="xs" :loading="saving" :disabled="!title.trim()" />
       </div>

@@ -26,7 +26,16 @@ async function saveEdit(id: number) {
   await refreshTags()
 }
 
+const { confirm } = useConfirm()
+
 async function deleteTag(id: number) {
+  const tag = tags.value?.find(t => t.id === id)
+  const ok = await confirm({
+    title: 'Delete tag?',
+    description: tag ? `"${tag.label}" will be removed from every recipe that uses it.` : 'This cannot be undone.',
+    confirmLabel: 'Delete'
+  })
+  if (!ok) return
   await $fetch(`/api/tags/${id}`, { method: 'DELETE' })
   await refreshTags()
 }

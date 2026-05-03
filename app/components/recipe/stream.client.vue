@@ -106,9 +106,20 @@ const formattedDate = computed(() =>
 <template>
   <div v-if="notFound" class="text-sm text-muted">Recipe not found.</div>
   <div v-else>
-    <!-- Metadata: title + tags + date. Skeleton until the first NDJSON line lands. -->
+    <!-- Title row: title on the left, parent-supplied action buttons
+         on the right. Skeleton until the first NDJSON line lands; the
+         actions slot is rendered immediately so Edit/Delete remain
+         interactive even before metadata arrives. -->
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <h1 v-if="meta" class="text-2xl font-bold leading-tight min-w-0 flex-1">{{ meta.title }}</h1>
+      <USkeleton v-else-if="!error" class="h-8 w-2/3 rounded" />
+      <span v-else class="flex-1" />
+      <div class="flex gap-1 shrink-0">
+        <slot name="actions" />
+      </div>
+    </div>
+
     <template v-if="meta">
-      <h1 class="text-2xl font-bold mb-4">{{ meta.title }}</h1>
       <div v-if="meta.tags.length" class="flex flex-wrap gap-1.5 mb-2">
         <span
           v-for="rt in meta.tags"
@@ -119,10 +130,7 @@ const formattedDate = computed(() =>
       </div>
       <p class="text-xs text-muted mb-6">Last updated: {{ formattedDate }}</p>
     </template>
-    <template v-else-if="!error">
-      <USkeleton class="h-8 w-2/3 mb-4 rounded" />
-      <USkeleton class="h-4 w-32 mb-6 rounded" />
-    </template>
+    <USkeleton v-else-if="!error" class="h-4 w-32 mb-6 rounded" />
 
     <!-- Body chunks. Each fades + slides + de-blurs in as it arrives. -->
     <div class="prose prose-sm dark:prose-invert max-w-none">

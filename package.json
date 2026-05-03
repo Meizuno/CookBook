@@ -16,6 +16,8 @@
     "@nuxtjs/mdc": "^0.21.1",
     "@prisma/client": "^6.5.0",
     "nuxt": "^4.4.2",
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.0",
     "tailwindcss": "^4.1.18",
     "vue": "^3.5.27",
     "vue-router": "^4.6.4",
